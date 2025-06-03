@@ -1,0 +1,233 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: voip-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./volumes/certbot/conf:/etc/letsencrypt:ro
+      - ./volumes/certbot/www:/var/www/certbot:ro
+    depends_on:
+      - api-gateway
+      - signaling-service
+    networks:
+      - voip-network
+    restart: always
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: voip-api-gateway
+    ports:
+      - "3000:3000"
+    command: npm run dev
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    depends_on:
+      - redis
+      - mongodb
+    networks:
+      - voip-network
+    restart: always
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: voip-auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URL=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/voip_auth?authSource=admin
+      - REDIS_HOST=redis
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - voip-network
+    restart: always
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: voip-user-service
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - MONGODB_URL=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/voip_users?authSource=admin
+      - REDIS_HOST=redis
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - voip-network
+    restart: always
+
+  call-service:
+    build:
+      context: ./call-service
+      dockerfile: Dockerfile
+    container_name: voip-call-service
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - MONGODB_URL=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/voip_calls?authSource=admin
+      - REDIS_HOST=redis
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - voip-network
+    restart: always
+
+  signaling-service:
+    build:
+      context: ./signaling-service
+      dockerfile: Dockerfile
+    container_name: voip-signaling-service
+    ports:
+      - "3004:3004"
+      - "3004:3004/udp"
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - REDIS_HOST=redis
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - redis
+    networks:
+      - voip-network
+    restart: always
+
+  media-service:
+    build:
+      context: ./media-service
+      dockerfile: Dockerfile
+    container_name: voip-media-service
+    volumes:
+      - ./volumes/recordings:/recordings
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+      - KURENTO_URL=ws://kurento:8888/kurento
+      - REDIS_HOST=redis
+      - RECORDING_PATH=/recordings
+    depends_on:
+      - kurento
+      - redis
+    networks:
+      - voip-network
+    restart: always
+
+  kurento:
+    image: kurento/kurento-media-server:7.0
+    container_name: voip-kurento
+    environment:
+      - GST_DEBUG=2,Kurento*:5
+      - KMS_MIN_PORT=40000
+      - KMS_MAX_PORT=50000
+    networks:
+      - voip-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  mongodb:
+    image: mongo:7.0
+    container_name: voip-mongodb
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+    volumes:
+      - ./volumes/mongodb:/data/db
+      - ./docker/mongodb/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - voip-network
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: voip-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - ./volumes/redis:/data
+    networks:
+      - voip-network
+    restart: always
+
+  coturn:
+    image: ghcr.io/coturn/coturn:4.7
+    container_name: voip-turn
+    network_mode: host
+    volumes:
+      - ./docker/coturn/turnserver.prod.conf:/etc/turnserver.conf:ro
+    restart: always
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: voip-prometheus
+    volumes:
+      - ./docker/prometheus/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - voip-network
+    restart: always
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: voip-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - voip-network
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=${FRONTEND_API_URL}
+        - REACT_APP_WS_URL=${FRONTEND_WS_URL}
+        - REACT_APP_ENV=production
+    container_name: voip-frontend
+    restart: always
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  voip-network:
+    driver: bridge 

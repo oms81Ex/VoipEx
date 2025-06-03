@@ -1,0 +1,26 @@
+# Node.js
+node_modules/
+
+# 빌드 산출물
+dist/
+frontend/dist/
+
+# 환경/민감 정보
+.env
+.env.*
+
+# 로그/임시 파일
+*.log
+*.pid
+*.db
+
+# 도커 볼륨/데이터
+volumes/
+
+# IDE/에디터
+.vscode/
+.idea/
+.DS_Store
+
+# 기타
+logs/ 
