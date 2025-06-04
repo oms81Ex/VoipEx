@@ -4,6 +4,7 @@ services:
   # Nginx 리버스 프록시
   nginx:
     image: nginx:alpine
+    platform: linux/amd64
     container_name: voip-nginx
     ports:
       - "80:80"
@@ -21,7 +22,8 @@ services:
   api-gateway:
     build:
       context: ./api-gateway
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.amd64
+    platform: linux/amd64
     container_name: voip-api-gateway
     volumes:
       - ./api-gateway:/app
@@ -45,7 +47,8 @@ services:
   auth-service:
     build:
       context: ./auth-service
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.amd64
+    platform: linux/amd64
     container_name: voip-auth-service
     volumes:
       - ./auth-service:/app
@@ -69,7 +72,8 @@ services:
   user-service:
     build:
       context: ./user-service
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.amd64
+    platform: linux/amd64
     container_name: voip-user-service
     volumes:
       - ./user-service:/app
@@ -92,7 +96,8 @@ services:
   call-service:
     build:
       context: ./call-service
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.amd64
+    platform: linux/amd64
     container_name: voip-call-service
     volumes:
       - ./call-service:/app
@@ -115,7 +120,8 @@ services:
   signaling-service:
     build:
       context: ./signaling-service
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.amd64
+    platform: linux/amd64
     container_name: voip-signaling-service
     volumes:
       - ./signaling-service:/app
@@ -138,7 +144,8 @@ services:
   media-service:
     build:
       context: ./media-service
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.amd64
+    platform: linux/amd64
     container_name: voip-media-service
     volumes:
       - ./media-service:/app
@@ -152,9 +159,11 @@ services:
       - KURENTO_URL=ws://kurento:8888/kurento
       - REDIS_HOST=redis
       - RECORDING_PATH=/recordings
+      - MONGODB_URL=mongodb://admin:12qwaszx@mongodb:27017/voip_media?authSource=admin
     depends_on:
       - kurento
       - redis
+      - mongodb
     networks:
       - voip-network
     command: npm run dev
@@ -162,6 +171,7 @@ services:
   # Kurento 미디어 서버
   kurento:
     image: kurento/kurento-media-server:7.0
+    platform: linux/amd64
     container_name: voip-kurento
     ports:
       - "8888:8888"
@@ -174,7 +184,8 @@ services:
 
   # MongoDB
   mongodb:
-    image: mongo:7.0
+    image: mongo:4.4
+    platform: linux/amd64
     container_name: voip-mongodb
     ports:
       - "27017:27017"
@@ -190,6 +201,7 @@ services:
   # Redis
   redis:
     image: redis:7-alpine
+    platform: linux/amd64
     container_name: voip-redis
     command: redis-server --requirepass 12qwaszx --appendonly yes
     ports:
@@ -202,6 +214,7 @@ services:
   # TURN Server (Coturn)
   coturn:
     image: coturn/coturn:latest
+    platform: linux/amd64
     container_name: voip-turn
     network_mode: host
     volumes:
@@ -211,6 +224,7 @@ services:
   # Prometheus (모니터링)
   prometheus:
     image: prom/prometheus:latest
+    platform: linux/amd64
     container_name: voip-prometheus
     ports:
       - "9090:9090"
@@ -226,6 +240,7 @@ services:
   # Grafana (모니터링 대시보드)
   grafana:
     image: grafana/grafana:latest
+    platform: linux/amd64
     container_name: voip-grafana
     ports:
       - "3006:3000"
@@ -240,17 +255,22 @@ services:
     networks:
       - voip-network
 
+  # Frontend
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - REACT_APP_API_URL=http://localhost:3000
-        - REACT_APP_WS_URL=ws://localhost:3004
-        - REACT_APP_ENV=development
+      dockerfile: Dockerfile.amd64
+    platform: linux/amd64
     container_name: voip-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     ports:
-      - "80:80"
+      - "8081:80"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3000/api
+      - VITE_WS_URL=ws://localhost:3004
     depends_on:
       - api-gateway
       - signaling-service

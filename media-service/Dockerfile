@@ -1,38 +1,56 @@
-FROM node:20-alpine
-
+FROM --platform=linux/amd64 node:20-alpine
 WORKDIR /app
-
-# Install system dependencies
 RUN apk add --no-cache \
+    ffmpeg \
     python3 \
     py3-pip \
+    python3-dev \
     make \
     g++ \
+    build-base \
+    ninja \
+    meson \
+    pkgconfig \
+    openssl-dev \
+    libuv-dev \
+    libsrtp-dev \
+    abseil-cpp-dev \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
     git \
-    gcc \
-    musl-dev \
-    linux-headers \
-    eudev-dev \
-    && ln -sf python3 /usr/bin/python
+    cmake \
+    autoconf \
+    automake \
+    libtool
 
-# Install dependencies with mediasoup build flags
+# usrsctp 소스 빌드 및 설치
+RUN git clone https://github.com/sctplab/usrsctp.git /tmp/usrsctp \
+    && cd /tmp/usrsctp \
+    && ./bootstrap \
+    && ./configure --prefix=/usr \
+    && make \
+    && make install \
+    && rm -rf /tmp/usrsctp
+
+# Build and install ninja from source (v1.11.1)
+RUN apk add --no-cache git cmake g++ make \
+    && git clone https://github.com/ninja-build/ninja.git /tmp/ninja \
+    && cd /tmp/ninja \
+    && git checkout v1.11.1 \
+    && cmake -Bbuild-cmake -H. \
+    && cmake --build build-cmake \
+    && cp build-cmake/ninja /usr/bin/ninja \
+    && chmod +x /usr/bin/ninja \
+    && ninja --version \
+    && rm -rf /tmp/ninja
+
+# 파이썬용 ninja/meson도 명시적으로 설치
+RUN pip install --break-system-packages --upgrade pip setuptools ninja meson
+
 COPY package*.json ./
-ENV MEDIASOUP_BYPASS_WORKAROUND=true
-RUN npm ci --build-from-source
-
-# Copy source code
+RUN npm ci --only=production
 COPY . .
-
-# Create media and logs directories
-RUN mkdir -p media/recordings logs
-
-# Environment variables will be provided through Docker Compose
-ENV NODE_ENV=production
-ENV PORT=3004
-
-# Add healthcheck
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget -q --spider http://localhost:3004/health || exit 1
-
-EXPOSE 3004
+EXPOSE 3005
 CMD ["npm", "start"] 
