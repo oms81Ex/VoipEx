@@ -1,0 +1,370 @@
+VoipEx 통화 시나리오 - PlantUML
+1. 1:1 음성 통화 시나리오
+1.1 통화 발신 및 연결
+plantuml
+@startuml
+!theme plain
+title 1:1 음성 통화 - 발신 및 연결
+
+actor Alice as A
+actor Bob as B
+participant "API Gateway" as AG
+participant "Auth Service" as AS
+participant "Call Service" as CS
+participant "Signaling Service" as SS
+participant "Media Service" as MS
+database Redis as R
+participant "Kurento/TURN" as K
+
+== 1. 통화 준비 ==
+A -> A: 통화 버튼 클릭
+A -> A: getUserMedia(audio)
+note right: 마이크 권한 요청
+
+== 2. 통화 요청 ==
+A -> AG: POST /api/calls/initiate\n(Bearer Token)
+AG -> AS: 토큰 검증
+AS --> AG: 인증 확인
+AG -> CS: 통화 생성 요청
+CS -> R: 통화 상태 저장
+CS --> AG: callId 반환
+AG --> A: 통화 ID 전달
+
+== 3. 시그널링 ==
+A -> SS: WebSocket 연결
+A -> SS: call-user 이벤트\n(targetUser: Bob)
+SS -> R: Alice 상태: calling
+SS -> B: incoming-call 이벤트
+B -> B: 벨소리 재생
+B -> B: 수락 버튼 표시
+
+== 4. WebRTC 협상 ==
+A -> A: createOffer()
+A -> SS: offer 전송
+SS -> B: offer 전달
+B -> B: getUserMedia(audio)
+B -> B: createAnswer()
+B -> SS: answer 전송
+SS -> A: answer 전달
+
+== 5. ICE 연결 ==
+A <-> SS: ICE candidates
+SS <-> B: ICE candidates
+note over A,B: STUN/TURN 서버를 통한\nNAT 순회
+
+== 6. 미디어 스트림 ==
+A <--> K: 오디오 스트림
+B <--> K: 오디오 스트림
+K -> MS: 미디어 라우팅
+note over A,B: 실시간 음성 통화 진행
+
+@enduml
+1.2 통화 종료
+plantuml
+@startuml
+!theme plain
+title 1:1 음성 통화 - 종료
+
+actor Alice as A
+actor Bob as B
+participant "Signaling Service" as SS
+participant "Call Service" as CS
+participant "Media Service" as MS
+database Redis as R
+database MongoDB as M
+
+== 통화 종료 시작 ==
+A -> A: 종료 버튼 클릭
+A -> SS: end-call 이벤트
+
+== 상대방 알림 ==
+SS -> B: call-ended 이벤트
+SS -> CS: 통화 종료 요청
+
+== 미디어 정리 ==
+SS -> MS: 세션 종료
+MS -> MS: 미디어 파이프라인 해제
+A -> A: RTCPeerConnection.close()
+B -> B: RTCPeerConnection.close()
+
+== 데이터 저장 ==
+CS -> CS: 통화 시간 계산
+CS -> M: 통화 기록 저장
+CS -> R: 활성 통화 제거
+
+== 상태 업데이트 ==
+SS -> R: Alice 상태: online
+SS -> R: Bob 상태: online
+SS -> A: 종료 확인
+SS -> B: 종료 확인
+
+@enduml
+2. 비디오 통화 시나리오
+plantuml
+@startuml
+!theme plain
+title 비디오 통화 활성화
+
+actor User as U
+participant "Frontend" as F
+participant "Signaling Service" as SS
+participant "Media Service" as MS
+
+== 비디오 활성화 ==
+U -> F: 비디오 버튼 클릭
+F -> F: getUserMedia({video: true})
+note right: 카메라 권한 요청
+F -> F: addTrack(videoTrack)
+
+== SDP 재협상 ==
+F -> F: createOffer()
+F -> SS: renegotiate 이벤트
+SS -> SS: 상대방에게 전달
+
+== 미디어 업데이트 ==
+SS -> MS: 비디오 스트림 추가
+MS -> MS: 비디오 파이프라인 구성
+note over U,MS: 비디오 + 오디오\n양방향 전송
+
+@enduml
+3. 그룹 통화 시나리오 (MCU 모드)
+plantuml
+@startuml
+!theme plain
+title 그룹 통화 - MCU 모드
+
+actor Alice as A
+actor Bob as B
+actor Charlie as C
+participant "Room Service" as RS
+participant "Signaling Service" as SS
+participant "Media Service" as MS
+participant "Kurento MCU" as K
+
+== 룸 생성 ==
+A -> RS: 그룹 통화 생성
+RS -> RS: roomId 생성
+RS --> A: roomId 반환
+
+== MCU 초기화 ==
+A -> MS: MCU 세션 요청
+MS -> K: Composite 파이프라인 생성
+K --> MS: MCU 준비 완료
+
+== 호스트 참가 ==
+A -> SS: join-room(roomId)
+SS -> MS: Alice 추가
+MS -> K: Alice 엔드포인트 생성
+note right: Alice 미디어 스트림
+
+== Bob 참가 ==
+B -> SS: join-room(roomId)
+SS -> MS: Bob 추가
+MS -> K: Bob 엔드포인트 생성
+K -> K: 믹싱 업데이트
+SS -> A: participant-joined(Bob)
+
+== Charlie 참가 ==
+C -> SS: join-room(roomId)
+SS -> MS: Charlie 추가
+MS -> K: Charlie 엔드포인트 생성
+K -> K: 믹싱 업데이트
+SS -> A,B: participant-joined(Charlie)
+
+== 미디어 믹싱 ==
+note over A,B,C,K: MCU가 모든 스트림을 믹싱하여\n각 참가자에게 하나의 스트림으로 전송
+A <-> K: Mixed Stream (B+C)
+B <-> K: Mixed Stream (A+C)
+C <-> K: Mixed Stream (A+B)
+
+@enduml
+4. 네트워크 재연결 시나리오
+plantuml
+@startuml
+!theme plain
+title 네트워크 재연결
+
+actor User as U
+participant "WebRTC" as W
+participant "Signaling Service" as SS
+
+== 연결 끊김 감지 ==
+W -> U: oniceconnectionstatechange
+note right: State: disconnected
+U -> U: 재연결 아이콘 표시
+
+== ICE Restart ==
+U -> W: createOffer({iceRestart: true})
+U -> SS: ice-restart 요청
+SS -> SS: 세션 유지 확인
+
+== 재협상 ==
+U -> SS: 새 SDP Offer
+SS -> SS: 상대방에게 전달
+note over U,SS: 새로운 ICE candidates 교환
+
+== 연결 복구 ==
+W -> U: oniceconnectionstatechange
+note right: State: connected
+U -> U: 정상 상태 표시
+note over U,W: 미디어 스트림 재개
+
+@enduml
+5. 통화 상태 다이어그램
+plantuml
+@startuml
+!theme plain
+title 통화 상태 전환
+
+[*] --> Idle : 초기 상태
+
+Idle --> Calling : 통화 시작
+Calling --> Ringing : 연결 시도
+Ringing --> Connected : 수락
+Ringing --> Failed : 거절/타임아웃
+Connected --> Ended : 통화 종료
+
+Failed --> Idle : 재시도
+Ended --> Idle : 완료
+
+Connected --> Reconnecting : 네트워크 문제
+Reconnecting --> Connected : 복구
+Reconnecting --> Failed : 실패
+
+note right of Failed : 에러 처리\n- 사용자 오프라인\n- 네트워크 오류\n- 미디어 오류
+
+note right of Connected : 통화 중 기능\n- 음소거\n- 비디오 on/off\n- 화면 공유\n- 녹음
+
+@enduml
+6. 보안 인증 플로우
+plantuml
+@startuml
+!theme plain
+title 보안 인증 플로우
+
+actor Client as C
+participant "API Gateway" as AG
+participant "Auth Service" as AS
+participant "Service" as S
+database Redis as R
+
+== 요청 ==
+C -> AG: API 요청\n+ JWT Token
+AG -> AG: 토큰 추출
+
+== 검증 ==
+AG -> AS: 토큰 검증 요청
+AS -> R: 세션 확인
+R --> AS: 세션 유효
+AS -> AS: JWT 서명 검증
+AS --> AG: 검증 결과
+
+== 서비스 호출 ==
+alt 인증 성공
+    AG -> S: 요청 전달\n+ userId
+    S -> S: 비즈니스 로직
+    S --> AG: 응답
+    AG --> C: 성공 응답
+else 인증 실패
+    AG --> C: 401 Unauthorized
+end
+
+@enduml
+7. 미디어 품질 적응 시나리오
+plantuml
+@startuml
+!theme plain
+title 미디어 품질 적응
+
+participant "Client" as C
+participant "Media Service" as MS
+participant "Kurento" as K
+
+== 품질 모니터링 ==
+loop 실시간 모니터링
+    C -> C: getStats()
+    note right: RTT, 패킷 손실,\n지터 측정
+    
+    alt 네트워크 상태 나쁨
+        C -> MS: quality-report(poor)
+        MS -> K: 비트레이트 감소
+        K -> K: 해상도 낮춤
+        K --> C: 저품질 스트림
+    else 네트워크 상태 좋음
+        C -> MS: quality-report(good)
+        MS -> K: 비트레이트 증가
+        K -> K: 해상도 높임
+        K --> C: 고품질 스트림
+    end
+end
+
+@enduml
+8. 전체 시스템 컴포넌트 다이어그램
+plantuml
+@startuml
+!theme plain
+title VoipEx 시스템 컴포넌트
+
+package "Client Layer" {
+    [React Web App]
+    [Mobile App]
+}
+
+package "Gateway Layer" {
+    [Nginx]
+    [API Gateway]
+}
+
+package "Service Layer" {
+    [Auth Service]
+    [User Service]
+    [Call Service]
+    [Signaling Service]
+    [Media Service]
+    [Room Service]
+}
+
+package "Media Processing" {
+    [Kurento Media Server]
+    [Coturn TURN Server]
+}
+
+package "Data Layer" {
+    database MongoDB
+    database Redis
+}
+
+package "Monitoring" {
+    [Prometheus]
+    [Grafana]
+}
+
+[React Web App] --> [Nginx]
+[Mobile App] --> [Nginx]
+[Nginx] --> [API Gateway]
+[Nginx] ..> [Signaling Service] : WebSocket
+
+[API Gateway] --> [Auth Service]
+[API Gateway] --> [User Service]
+[API Gateway] --> [Call Service]
+
+[Signaling Service] --> [Redis]
+[Media Service] --> [Kurento Media Server]
+[Media Service] --> [Redis]
+
+[Auth Service] --> MongoDB
+[Auth Service] --> [Redis]
+[User Service] --> MongoDB
+[Call Service] --> MongoDB
+
+[Prometheus] --> [Service Layer]
+[Grafana] --> [Prometheus]
+
+note bottom of [Coturn TURN Server]
+    NAT 순회를 위한
+    STUN/TURN 서버
+end note
+
+@enduml
+이 PlantUML 다이어그램들은 VoipEx의 주요 통화 시나리오를 직관적이고 심플하게 표현합니다. 각 다이어그램은 특정 시나리오에 집중하여 이해하기 쉽도록 구성했습니다.
+
