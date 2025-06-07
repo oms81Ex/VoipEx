@@ -1,56 +1,74 @@
-FROM --platform=linux/amd64 node:20-alpine
+FROM --platform=linux/amd64 node:20-bullseye-slim
+
 WORKDIR /app
-RUN apk add --no-cache \
-    ffmpeg \
+
+# Install system dependencies
+RUN echo "AMD64_DEBUG: Starting system package installation..." && \
+    apt-get update && \
+    apt-get install -y \
     python3 \
-    py3-pip \
+    python3-pip \
     python3-dev \
     make \
     g++ \
-    build-base \
-    ninja \
-    meson \
-    pkgconfig \
-    openssl-dev \
-    libuv-dev \
-    libsrtp-dev \
-    abseil-cpp-dev \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    giflib-dev \
+    build-essential \
+    ninja-build \
+    pkg-config \
+    openssl \
+    libssl-dev \
+    libuv1-dev \
+    libsrtp2-dev \
+    libabsl-dev \
+    libcairo2-dev \
+    libjpeg-dev \
+    libpango1.0-dev \
+    libgif-dev \
     git \
     cmake \
     autoconf \
     automake \
-    libtool
+    libtool \
+    && rm -rf /var/lib/apt/lists/*
 
-# usrsctp 소스 빌드 및 설치
-RUN git clone https://github.com/sctplab/usrsctp.git /tmp/usrsctp \
-    && cd /tmp/usrsctp \
-    && ./bootstrap \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install \
-    && rm -rf /tmp/usrsctp
+# Install Python packages
+RUN echo "AMD64_DEBUG: Python version check..." && \
+    python3 --version && \
+    pip3 --version && \
+    echo "AMD64_DEBUG: Installing meson and ninja..." && \
+    pip3 install --no-cache-dir -v \
+    meson==1.5.0 \
+    ninja==1.10.2.4 \
+    setuptools \
+    wheel
 
-# Build and install ninja from source (v1.11.1)
-RUN apk add --no-cache git cmake g++ make \
-    && git clone https://github.com/ninja-build/ninja.git /tmp/ninja \
-    && cd /tmp/ninja \
-    && git checkout v1.11.1 \
-    && cmake -Bbuild-cmake -H. \
-    && cmake --build build-cmake \
-    && cp build-cmake/ninja /usr/bin/ninja \
-    && chmod +x /usr/bin/ninja \
-    && ninja --version \
-    && rm -rf /tmp/ninja
+# Verify build tools
+RUN echo "AMD64_DEBUG: Verifying build tools..." && \
+    echo "  - Meson version: $(meson --version)" && \
+    echo "  - Ninja version: $(ninja --version)"
 
-# 파이썬용 ninja/meson도 명시적으로 설치
-RUN pip install --break-system-packages --upgrade pip setuptools ninja meson
+# Set environment variables
+ENV NODE_ENV=development \
+    PORT=3005 \
+    MEDIASOUP_SKIP_WORKER_PREBUILT_DOWNLOAD=false \
+    MEDIASOUP_FORCE_WORKER_REBUILD=false \
+    PYTHON=/usr/bin/python3
 
+# Install nodemon globally
+RUN npm install -g nodemon
+
+# Install dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
+
+# Copy source code
 COPY . .
+
+# Create recordings directory
+RUN mkdir -p /recordings
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD wget -q --spider http://localhost:3005/health || exit 1
+
 EXPOSE 3005
-CMD ["npm", "start"] 
+CMD ["npm", "run", "dev"]

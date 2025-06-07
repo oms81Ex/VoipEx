@@ -43,6 +43,33 @@ services:
       - voip-network
     command: npm run dev
 
+  # Room 서비스
+  room-service:
+    build:
+      context: ./room-service
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: voip-room-service
+    volumes:
+      - ./room-service:/app
+      - /app/node_modules
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - MONGODB_URL=mongodb://admin:12qwaszx@mongodb:27017/voip_rooms?authSource=admin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=12qwaszx
+      - AUTH_SERVICE_URL=http://voip-auth-service:3001
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - voip-network
+    command: npm run dev
+
   # 인증 서비스
   auth-service:
     build:
@@ -85,6 +112,7 @@ services:
       - PORT=3002
       - MONGODB_URL=mongodb://admin:12qwaszx@mongodb:27017/voip_users?authSource=admin
       - REDIS_HOST=redis
+      - AUTH_SERVICE_URL=http://voip-auth-service:3001
     depends_on:
       - mongodb
       - redis
@@ -109,6 +137,8 @@ services:
       - PORT=3003
       - MONGODB_URL=mongodb://admin:12qwaszx@mongodb:27017/voip_calls?authSource=admin
       - REDIS_HOST=redis
+      - REDIS_PASSWORD=12qwaszx
+      - AUTH_SERVICE_URL=http://voip-auth-service:3001
     depends_on:
       - mongodb
       - redis
@@ -243,7 +273,7 @@ services:
     platform: linux/amd64
     container_name: voip-grafana
     ports:
-      - "3006:3000"
+      - "3007:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=12qwaszx
       - GF_USERS_ALLOW_SIGN_UP=false

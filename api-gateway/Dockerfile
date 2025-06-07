@@ -1,18 +1,12 @@
-FROM node:18-alpine
-
+FROM --platform=linux/amd64 node:18-alpine
 WORKDIR /app
-
-# Install dependencies
 COPY package*.json ./
-RUN npm install
-
-# Copy source code and build
+RUN npm ci
 COPY . .
-RUN npm run build
 
 # Environment variables
-ENV NODE_ENV=production
-ENV PORT=3000
+ENV NODE_ENV=production \
+    PORT=3000
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=3s \

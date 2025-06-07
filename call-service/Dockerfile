@@ -1,24 +1,18 @@
-FROM node:18-alpine
-
+FROM --platform=linux/amd64 node:18-alpine
 WORKDIR /app
 
-# Install dependencies
+# Install build dependencies and nodemon globally
+RUN npm install -g nodemon
+
+# Install all dependencies including devDependencies
 COPY package*.json ./
 RUN npm ci
 
-# Copy source code
 COPY . .
 
-# Create logs directory
-RUN mkdir -p logs
-
-# Environment variables will be provided through Docker Compose
-ENV NODE_ENV=production
-ENV PORT=3003
-
-# Add healthcheck
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget -q --spider http://localhost:3003/health || exit 1
+# Environment variables
+ENV NODE_ENV=development \
+    PORT=3003
 
 EXPOSE 3003
-CMD ["npm", "start"] 
+CMD ["npm", "run", "dev"] 

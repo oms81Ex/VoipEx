@@ -19,6 +19,26 @@ services:
       - voip-network
     restart: always
 
+  room-service:
+    build:
+      context: ./room-service
+      dockerfile: Dockerfile
+    container_name: voip-room-service
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+      - MONGODB_URL=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/voip_rooms?authSource=admin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - AUTH_SERVICE_URL=http://auth-service:3001
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - voip-network
+    restart: always
+
   api-gateway:
     build:
       context: ./api-gateway
