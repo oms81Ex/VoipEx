@@ -67,7 +67,7 @@ app.use(handleError);
 
 // Database connection
 if (process.env.NODE_ENV !== 'test') {
-  mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/voip-auth')
+  mongoose.connect(process.env.MONGODB_URI || process.env.MONGODB_URL || 'mongodb://localhost:27017/voip-auth')
     .then(() => {
       logger.info('Connected to MongoDB');
     })

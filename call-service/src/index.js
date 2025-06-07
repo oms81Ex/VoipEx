@@ -65,6 +65,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
 app.use('/calls', callRoutes);
+app.use('/call', callRoutes); // 안드로이드 앱 호환성을 위해 추가
 
 // Health check
 app.get('/health', (req, res) => {
@@ -99,7 +100,7 @@ app.use(handleError);
 
 // Database connection
 if (process.env.NODE_ENV !== 'test') {
-  mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/voip-call')
+  mongoose.connect(process.env.MONGODB_URI || process.env.MONGODB_URL || 'mongodb://localhost:27017/voip-call')
     .then(() => {
       logger.info('Connected to MongoDB');
     })

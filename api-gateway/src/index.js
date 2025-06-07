@@ -22,6 +22,8 @@ app.get('/health', (req, res) => {
 const services = {
   '/api/auth': { target: 'http://auth-service:3001', rewrite: { '^/api/auth': '/auth' } },
   '/api/users': { target: 'http://user-service:3002', rewrite: { '^/api/users': '/users' } },
+  '/api/profile': { target: 'http://user-service:3002', rewrite: { '^/api/profile': '/profile' } },
+  '/api/guests': { target: 'http://user-service:3002', rewrite: { '^/api/guests': '/guests' } },
   '/api/calls': { target: 'http://call-service:3003', rewrite: { '^/api/calls': '/calls' } }
 };
 

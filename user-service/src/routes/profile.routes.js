@@ -146,4 +146,13 @@ router.get('/online', protect, profileController.getOnlineUsers);
 // Update user profile
 router.put('/update', protect, validateProfileUpdate, profileController.updateProfile);
 
+// 연락처 추가
+router.post('/contacts', protect, profileController.addContact);
+
+// Search user
+router.get('/search', protect, profileController.searchUser);
+
+// Delete user (mainly for guest users)
+router.delete('/:userId', profileController.deleteUser);
+
 module.exports = router; 

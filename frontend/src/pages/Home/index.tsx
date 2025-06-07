@@ -16,6 +16,9 @@ import {
 import { Add as AddIcon } from '@mui/icons-material';
 import { api } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
+import GuestContacts from '@/components/GuestContacts';
+import { useGuestCall } from '@/hooks/guest/useGuestCall';
+import { io, Socket } from 'socket.io-client';
 
 interface RoomData {
   id: string;
@@ -37,6 +40,24 @@ const Home = () => {
     isPrivate: false,
     password: ''
   });
+  const [socket, setSocket] = useState<Socket | null>(null);
+  
+  // 게스트 통화 관련
+  const { startCall, isCallActive } = useGuestCall({
+    socket,
+    currentUserId: user?.id || '',
+    onIncomingCall: (caller) => {
+      // 수신 통화 처리 (추후 구현)
+      console.log('Incoming call from:', caller);
+    }
+  });
+  
+  const handleStartGuestCall = (targetUserId: string, targetUserName: string, callType: 'audio' | 'video') => {
+    // 게스트 간 직접 통화 시작
+    startCall(targetUserId, targetUserName, callType);
+    // 통화 화면으로 이동
+    navigate(`/call/${targetUserId}`);
+  };
 
   const handleCreateRoom = async () => {
     try {
@@ -68,49 +89,89 @@ const Home = () => {
     }
   };
 
+  // 게스트 사용자 여부 확인
+  const isGuest = user?.role === 'guest' || user?.id?.startsWith('guest_');
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
-        <Typography variant="h4" component="h1">
-          Available Rooms
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setCreateDialogOpen(true)}
-        >
-          Create Room
-        </Button>
-      </Box>
-
-      <Grid container spacing={3}>
-        {rooms.map((room) => (
-          <Grid item xs={12} sm={6} md={4} key={room.id}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {room.name}
-                </Typography>
-                <Typography color="textSecondary">
-                  Participants: {room.participantCount}/{room.maxParticipants}
-                </Typography>
-                <Typography color="textSecondary">
-                  Status: {room.status}
-                </Typography>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  sx={{ mt: 2 }}
-                  disabled={room.status !== 'active'}
-                  onClick={() => handleJoinRoom(room.id, room.isPrivate)}
-                >
-                  Join Room
-                </Button>
-              </CardContent>
-            </Card>
+      {isGuest ? (
+        // 게스트 사용자용 UI
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <GuestContacts
+              currentUser={{
+                id: user?.id || '',
+                name: user?.name || 'Guest',
+                token: user?.token
+              }}
+              onStartCall={handleStartGuestCall}
+            />
           </Grid>
-        ))}
-      </Grid>
+          <Grid item xs={12} md={8}>
+            <Box>
+              <Typography variant="h4" component="h1" gutterBottom>
+                게스트 모드
+              </Typography>
+              <Typography color="text.secondary" paragraph>
+                왼쪽 목록에서 다른 게스트를 선택하여 통화할 수 있습니다.
+              </Typography>
+              <Typography color="text.secondary">
+                또는 아래에서 룸을 생성하거나 참가할 수 있습니다.
+              </Typography>
+            </Box>
+          </Grid>
+        </Grid>
+      ) : (
+        // 일반 사용자용 UI
+        <>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
+            <Typography variant="h4" component="h1">
+              Available Rooms
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              Create Room
+            </Button>
+          </Box>
+        </>
+      )}
+
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h5" gutterBottom>
+          {isGuest ? '룸 목록' : ''}
+        </Typography>
+        <Grid container spacing={3}>
+          {rooms.map((room) => (
+            <Grid item xs={12} sm={6} md={4} key={room.id}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    {room.name}
+                  </Typography>
+                  <Typography color="textSecondary">
+                    Participants: {room.participantCount}/{room.maxParticipants}
+                  </Typography>
+                  <Typography color="textSecondary">
+                    Status: {room.status}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    sx={{ mt: 2 }}
+                    disabled={room.status !== 'active'}
+                    onClick={() => handleJoinRoom(room.id, room.isPrivate)}
+                  >
+                    Join Room
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
 
       <Dialog
         open={isCreateDialogOpen}
@@ -183,4 +244,4 @@ const Home = () => {
   );
 };
 
-export default Home; 
+export default Home;

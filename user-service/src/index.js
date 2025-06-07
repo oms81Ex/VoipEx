@@ -8,6 +8,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
 const profileRoutes = require('./routes/profile.routes');
+const guestRoutes = require('./routes/guest.routes');
 const { handleError } = require('./utils/error');
 const logger = require('./utils/logger');
 
@@ -56,6 +57,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
 app.use('/profile', profileRoutes);
+app.use('/guests', guestRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -67,7 +69,7 @@ app.use(handleError);
 
 // Database connection
 if (process.env.NODE_ENV !== 'test') {
-  mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/voip-user')
+  mongoose.connect(process.env.MONGODB_URI || process.env.MONGODB_URL || 'mongodb://localhost:27017/voip-user')
     .then(() => {
       logger.info('Connected to MongoDB');
     })

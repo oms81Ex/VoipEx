@@ -22,10 +22,18 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Add /health route
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'api-gateway' });
+});
+
 const services = {
   '/api/auth': { target: 'http://auth-service:3001', rewrite: { '^/api/auth': '/auth' } },
   '/api/users': { target: 'http://user-service:3002', rewrite: { '^/api/users': '/users' } },
-  '/api/calls': { target: 'http://call-service:3003', rewrite: { '^/api/calls': '/calls' } }
+  '/api/profile': { target: 'http://user-service:3002', rewrite: { '^/api/profile': '/profile' } },
+  '/api/guests': { target: 'http://user-service:3002', rewrite: { '^/api/guests': '/guests' } },
+  '/api/calls': { target: 'http://call-service:3003', rewrite: { '^/api/calls': '/calls' } },
+  '/api/call': { target: 'http://call-service:3003', rewrite: { '^/api/call': '/call' } }
 } as const;
 
 (Object.keys(services) as Array<keyof typeof services>).forEach(path => {

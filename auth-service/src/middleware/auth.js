@@ -15,6 +15,13 @@ exports.protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // Guest 사용자인 경우 DB 조회 건너뛰기
+    if (decoded.role === 'guest') {
+      req.user = decoded;
+      next();
+      return;
+    }
+
     // Check if user still exists
     const user = await User.findById(decoded.id);
     if (!user) {
