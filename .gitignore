@@ -8,6 +8,8 @@ frontend/dist/
 # 환경/민감 정보
 .env
 .env.*
+!.env.development
+!.env.example
 
 # 로그/임시 파일
 *.log
