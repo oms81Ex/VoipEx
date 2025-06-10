@@ -10,6 +10,8 @@ frontend/dist/
 .env.*
 !.env.development
 !.env.example
+# oms_env는 개인 설정 파일로 git에 추가됨 (주의: 실제 운영 환경에서는 제외해야 함)
+!oms_env
 
 # 로그/임시 파일
 *.log
